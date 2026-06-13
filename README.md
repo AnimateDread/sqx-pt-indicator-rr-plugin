@@ -33,8 +33,41 @@ This matches normal SQX plugin structure like your existing AutoRename plugin.
 1. Copy this repo's `user` folder into your SQX installation root (merge folders).
 2. In SQX, open Code Editor and compile plugins (or restart SQX).
 
+## Troubleshooting
+
+### UI Not Loading (Checkboxes Missing)
+
+If the checkboxes don't appear in Profit Target settings:
+
+1. **Method 1: Manual module registration (temporary)**
+   - Open browser DevTools (`F12`)  
+   - Go to Console tab
+   - Paste:
+     ```javascript
+     // Temporarily inject the module
+     angular.module('app.settings.indicatorrrenforcer', ['sqplugin'])
+     .run(function($injector, $templateCache) {
+       console.log('[IndicatorRREnforcer] Manual injection started');
+       // [rest of ui/module.js code here]
+     });
+     angular.module('app').requires.push('app.settings.indicatorrrenforcer');
+     location.reload();
+     ```
+
+2. **Method 2: Automatic registration (permanent)**
+   - SQX UI modules need to be in a discoverable path. Copy:
+     - From: `user/extend/Plugins/IndicatorRREnforcer/ui/module.js`
+     - To: `internal/plugins/IndicatorRREnforcer/ui/module.js` (create folder if needed)
+   - Restart SQX
+
+3. **Method 3: Check logs**
+   - Open browser DevTools Console
+   - Look for `[IndicatorRREnforcer]` messages
+   - If you see error messages, they'll help diagnose the issue
+
 ## Notes
 
 - The Java plugin compiles against SQX libraries.
 - The UI patch depends on internal Angular template/service names used by current SQX builds.
 - If SQX changes those names in a future build, adjust `ui/module.js` accordingly.
+

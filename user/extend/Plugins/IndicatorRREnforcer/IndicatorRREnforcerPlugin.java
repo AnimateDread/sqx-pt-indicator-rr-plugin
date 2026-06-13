@@ -55,6 +55,7 @@ public class IndicatorRREnforcerPlugin implements ISQPlugin, IServletPlugin {
     @Override
     public void initPlugin() throws Exception {
         this.servlet = new IndicatorRREnforcerServlet();
-        Log.info("IndicatorRREnforcer plugin initialized");
+        Log.info("IndicatorRREnforcer plugin initialized - UI module requires manual inclusion in app");
+        Log.info("Add this to your app.js initialization: angular.module('app').requires.push('app.settings.indicatorrrenforcer');");
     }
 }
