@@ -1,34 +1,37 @@
 ﻿# SQX Indicator RR Enforcer
 
-StrategyQuant X user plugin scaffold to replace internal-only RR indicator-level toggles with a portable user plugin.
+StrategyQuant X user plugin that exposes two Profit Target options for indicator-level RR handling without patching SQX internal files.
 
-## Goal
+## What It Adds
 
-Convert the internal overlay changes into a regular user plugin so updates between SQX builds do not require patching internal files.
+- `EnforceIndicatorRRRatio`
+- `IndicatorRRAdjustPT`
 
-## Feasibility Summary
+The plugin does this by:
 
-Based on diffing your custom overlay against SQX 144:
+1. Patching Profit Target settings template at runtime (adds 2 checkboxes).
+2. Wrapping `ProfitTargetService` methods at runtime so the two flags:
+   - load from task XML
+   - save back to task XML
+   - reset correctly
+   - appear in settings description
 
-- Modified files are UI/template/task-default files only.
-- No Java backend/snippet changes were found in your overlay (`ProfitTarget.java` is identical to stock 144).
-- Custom keys introduced:
-  - `EnforceIndicatorRRRatio`
-  - `IndicatorRRAdjustPT`
+## Plugin Layout
 
-This strongly suggests migration to user plugin is feasible by decorating frontend services/templates and injecting default task XML values through plugin hooks.
+- `user/extend/Plugins/IndicatorRREnforcer/IndicatorRREnforcerPlugin.java`
+- `user/extend/Plugins/IndicatorRREnforcer/ui/module.js`
+- `user/extend/Plugins/IndicatorRREnforcer/.project`
+- `user/extend/Plugins/IndicatorRREnforcer/.classpath`
 
-## Current Status
+This matches normal SQX plugin structure like your existing AutoRename plugin.
 
-This repository contains:
+## Install (No .sxp)
 
-- plugin skeleton (`IndicatorRREnforcerPlugin.java`)
-- frontend module scaffold (`ui/module.js`)
-- migration notes and implementation checklist
+1. Copy this repo's `user` folder into your SQX installation root (merge folders).
+2. In SQX, open Code Editor and compile plugins (or restart SQX).
 
-## Next Steps
+## Notes
 
-1. Implement Angular decorator for `ProfitTargetService` load/save/reset/getDescription.
-2. Inject / override the Profit Target HTML template in `$templateCache` to add the 2 toggles.
-3. Add optional task-template migration helper for existing projects.
-4. Build `.sxp` package and validate on SQX 144+.
+- The Java plugin compiles against SQX libraries.
+- The UI patch depends on internal Angular template/service names used by current SQX builds.
+- If SQX changes those names in a future build, adjust `ui/module.js` accordingly.

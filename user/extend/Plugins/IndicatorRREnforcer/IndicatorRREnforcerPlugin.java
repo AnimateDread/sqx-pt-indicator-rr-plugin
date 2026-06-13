@@ -1,4 +1,4 @@
-﻿package com.strategyquant.userplugins.indicatorrr;
+package com.strategyquant.userplugins.indicatorrr;
 
 import com.strategyquant.pluginlib.ISQPlugin;
 import com.strategyquant.pluginlib.annotations.Category;
