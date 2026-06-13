@@ -1,4 +1,4 @@
-﻿angular.module('app.settings.indicatorrrenforcer', ['sqplugin'])
+﻿angular.module('app.settings')
 .run(function($injector, $templateCache) {
     console.log('[IndicatorRREnforcer] Module loaded');
     
@@ -13,25 +13,20 @@
 
     function patchTemplate() {
         var templateId = '../../../internal/plugins/SettingsWhatToBuild/views/settings/profitTarget/profitTarget.html';
-        var tpl = $templateCache.get(templateId);
-        if (!tpl) {
-            console.warn('[IndicatorRREnforcer] Template not found');
-            return;
-        }
-        
-        if (tpl.indexOf('enforceIndicatorRRRatio') >= 0) {
-            console.log('[IndicatorRREnforcer] Template already patched');
-            return;
-        }
 
-        var marker = '<br />\n</fieldset>';
-        var idx = tpl.indexOf(marker);
-        if (idx < 0) {
-            console.warn('[IndicatorRREnforcer] Cannot find template insertion point');
-            return;
-        }
+        function withInjectedControls(tpl) {
+            if (!tpl || tpl.indexOf('enforceIndicatorRRRatio') >= 0) {
+                return tpl;
+            }
 
-        var extra = '\n\n    <div class="row row-smaller">' +
+            var marker = '<br />\n</fieldset>';
+            var idx = tpl.indexOf(marker);
+            if (idx < 0) {
+                console.warn('[IndicatorRREnforcer] Cannot find template insertion point');
+                return tpl;
+            }
+
+            var extra = '\n\n    <div class="row row-smaller">' +
             '\n        <div class="col col-sm-4">' +
             '\n            <div class="sq-checkbox">' +
             '\n                <input type="checkbox" ng-model="config.enforceIndicatorRRRatio" ng-disabled="!config.indicatorBased" id="enforceIndicatorRRRatio" />' +
@@ -54,9 +49,36 @@
             '\n        </div>' +
             '\n    </div>';
 
-        tpl = tpl.substring(0, idx) + extra + '\n' + tpl.substring(idx);
-        $templateCache.put(templateId, tpl);
-        console.log('[IndicatorRREnforcer] Template patched successfully');
+            return tpl.substring(0, idx) + extra + '\n' + tpl.substring(idx);
+        }
+
+        var tpl = $templateCache.get(templateId);
+        if (tpl) {
+            var patched = withInjectedControls(tpl);
+            if (patched !== tpl) {
+                $templateCache.put(templateId, patched);
+                console.log('[IndicatorRREnforcer] Template patched successfully (immediate)');
+            } else {
+                console.log('[IndicatorRREnforcer] Template already patched (immediate)');
+            }
+        } else {
+            console.warn('[IndicatorRREnforcer] Template not found yet, waiting for template cache put');
+        }
+
+        if (!$templateCache.__indicatorRrPutWrapped) {
+            var originalPut = $templateCache.put;
+            $templateCache.put = function(key, value) {
+                if (key === templateId && typeof value === 'string') {
+                    var patchedValue = withInjectedControls(value);
+                    if (patchedValue !== value) {
+                        console.log('[IndicatorRREnforcer] Template patched successfully (deferred)');
+                        return originalPut.call(this, key, patchedValue);
+                    }
+                }
+                return originalPut.apply(this, arguments);
+            };
+            $templateCache.__indicatorRrPutWrapped = true;
+        }
     }
 
     function patchService() {
