@@ -1,5 +1,15 @@
-﻿angular.module('app.settings.indicatorrrenforcer', ['sqplugin'])
-.run(function($injector, $templateCache) {
+﻿var indicatorRRModule = angular.module('app.settings.indicatorrrenforcer', []);
+
+// Inject into main app
+try {
+    angular.module('app').requires.push('app.settings.indicatorrrenforcer');
+    console.info('[IndicatorRREnforcer] Module injected into main app');
+} catch (e) {
+    console.warn('[IndicatorRREnforcer] Could not inject into main app (not loaded yet):', e.message);
+}
+
+indicatorRRModule.run(function($injector, $templateCache) {
+    console.info('[IndicatorRREnforcer] Module run() executed');
     var TEMPLATE_ID = '../../../internal/plugins/SettingsWhatToBuild/views/settings/profitTarget/profitTarget.html';
     var FLAG_1 = 'EnforceIndicatorRRRatio';
     var FLAG_2 = 'IndicatorRRAdjustPT';
@@ -242,6 +252,42 @@
 
                 return description;
             };
+        }
+
+        function getChildElement(elem, name) {
+            if (!elem) return null;
+            var children = elem.childNodes;
+            for (var i = 0; i < children.length; i++) {
+                if (children[i].nodeName === name) {
+                    return children[i];
+                }
+            }
+            return null;
+        }
+
+        function createChild(elem, name, xmlDoc) {
+            var existing = getChildElement(elem, name);
+            if (existing) {
+                return existing;
+            }
+            var newElem = xmlDoc.createElement(name);
+            elem.appendChild(newElem);
+            return newElem;
+        }
+
+        function getNodeBooleanValue(elem, nodeName, defaultValue) {
+            var node = getChildElement(elem, nodeName);
+            if (!node) return defaultValue;
+            var text = node.textContent || node.innerText || '';
+            return text.toLowerCase() === 'true' || text === '1' || text === 'yes';
+        }
+
+        function setNodeValue(node, value, xmlDoc) {
+            while (node.firstChild) {
+                node.removeChild(node.firstChild);
+            }
+            var text = xmlDoc.createTextNode(value ? 'true' : 'false');
+            node.appendChild(text);
         }
     }
 });
