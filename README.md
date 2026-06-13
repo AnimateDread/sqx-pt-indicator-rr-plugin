@@ -15,10 +15,13 @@ The plugin does this by:
    - save back to task XML
    - reset correctly
    - appear in settings description
+3. Exposing a lightweight servlet endpoint for plugin health/status (`/indicatorrr/status`).
+4. Writing startup diagnostics to the browser console with patch results.
 
 ## Plugin Layout
 
 - `user/extend/Plugins/IndicatorRREnforcer/IndicatorRREnforcerPlugin.java`
+- `user/extend/Plugins/IndicatorRREnforcer/IndicatorRREnforcerServlet.java`
 - `user/extend/Plugins/IndicatorRREnforcer/ui/module.js`
 - `user/extend/Plugins/IndicatorRREnforcer/.project`
 - `user/extend/Plugins/IndicatorRREnforcer/.classpath`

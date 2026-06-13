@@ -1,10 +1,17 @@
 package com.strategyquant.userplugins.indicatorrr;
 
+import org.eclipse.jetty.server.Handler;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.strategyquant.pluginlib.ISQPlugin;
 import com.strategyquant.pluginlib.annotations.Category;
 import com.strategyquant.pluginlib.annotations.License;
 import com.strategyquant.pluginlib.annotations.Name;
 import com.strategyquant.pluginlib.annotations.ShortDesc;
+import com.strategyquant.tradinglib.servlet.IServletPlugin;
 
 import net.xeoh.plugins.base.annotations.PluginImplementation;
 import net.xeoh.plugins.base.annotations.meta.Author;
@@ -15,7 +22,25 @@ import net.xeoh.plugins.base.annotations.meta.Author;
 @License(text = "")
 @ShortDesc(text = "Adds indicator-level RR enforcement controls for Profit Target settings")
 @PluginImplementation
-public class IndicatorRREnforcerPlugin implements ISQPlugin {
+public class IndicatorRREnforcerPlugin implements ISQPlugin, IServletPlugin {
+
+    public static final Logger Log = LoggerFactory.getLogger(IndicatorRREnforcerPlugin.class);
+
+    private ServletContextHandler context;
+    private IndicatorRREnforcerServlet servlet;
+
+    @Override
+    public Handler getHandler() {
+        if (context == null) {
+            if (servlet == null) {
+                servlet = new IndicatorRREnforcerServlet();
+            }
+            context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+            context.setContextPath("/indicatorrr/");
+            context.addServlet(new ServletHolder(servlet), "/*");
+        }
+        return context;
+    }
 
     @Override
     public String getProduct() {
@@ -29,6 +54,7 @@ public class IndicatorRREnforcerPlugin implements ISQPlugin {
 
     @Override
     public void initPlugin() throws Exception {
-        // Frontend behavior is provided by user/extend/Plugins/IndicatorRREnforcer/ui/module.js
+        this.servlet = new IndicatorRREnforcerServlet();
+        Log.info("IndicatorRREnforcer plugin initialized");
     }
 }

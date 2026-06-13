@@ -3,20 +3,44 @@
     var TEMPLATE_ID = '../../../internal/plugins/SettingsWhatToBuild/views/settings/profitTarget/profitTarget.html';
     var FLAG_1 = 'EnforceIndicatorRRRatio';
     var FLAG_2 = 'IndicatorRRAdjustPT';
+    var LOG_PREFIX = '[IndicatorRREnforcer]';
 
-    patchProfitTargetTemplate();
-    patchProfitTargetService();
+    var templatePatched = patchProfitTargetTemplate();
+    var servicePatched = patchProfitTargetService();
+
+    logInfo('startup', {
+        templatePatched: templatePatched,
+        servicePatched: servicePatched
+    });
+
+    function logInfo(message, data) {
+        if (window && window.console && typeof window.console.info === 'function') {
+            window.console.info(LOG_PREFIX + ' ' + message, data || '');
+        }
+    }
+
+    function logWarn(message, data) {
+        if (window && window.console && typeof window.console.warn === 'function') {
+            window.console.warn(LOG_PREFIX + ' ' + message, data || '');
+        }
+    }
 
     function patchProfitTargetTemplate() {
         var tpl = $templateCache.get(TEMPLATE_ID);
         if (!tpl || tpl.indexOf('enforceIndicatorRRRatio') >= 0) {
-            return;
+            if (!tpl) {
+                logWarn('template not found', { templateId: TEMPLATE_ID });
+            } else {
+                logInfo('template already patched', { templateId: TEMPLATE_ID });
+            }
+            return false;
         }
 
         var marker = '<div class="row row-smaller indicator-levels">';
         var markerIndex = tpl.indexOf(marker);
         if (markerIndex < 0) {
-            return;
+            logWarn('template marker not found', { marker: marker });
+            return false;
         }
 
         var insertAt = tpl.indexOf('\n    <br />\n</fieldset>', markerIndex);
@@ -24,7 +48,8 @@
             insertAt = tpl.indexOf('<br />\n</fieldset>', markerIndex);
         }
         if (insertAt < 0) {
-            return;
+            logWarn('template insert point not found');
+            return false;
         }
 
         var extra = '' +
@@ -53,6 +78,8 @@
 
         tpl = tpl.slice(0, insertAt) + extra + tpl.slice(insertAt);
         $templateCache.put(TEMPLATE_ID, tpl);
+        logInfo('template patched', { templateId: TEMPLATE_ID });
+        return true;
     }
 
     function patchProfitTargetService() {
@@ -60,11 +87,15 @@
         try {
             service = $injector.get('ProfitTargetService');
         } catch (e) {
-            return;
+            logWarn('ProfitTargetService not available', { error: e && e.message ? e.message : e });
+            return false;
         }
 
         if (!service || service.__indicatorRRPatchApplied) {
-            return;
+            if (service && service.__indicatorRRPatchApplied) {
+                logInfo('service already patched');
+            }
+            return false;
         }
         service.__indicatorRRPatchApplied = true;
 
@@ -80,6 +111,8 @@
         wrapGetDescription();
 
         ensureFlags(false);
+        logInfo('service patched');
+        return true;
 
         function safeGet(name) {
             try {
