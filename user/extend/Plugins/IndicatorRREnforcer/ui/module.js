@@ -132,6 +132,7 @@
         // Wrap saveSettings to persist our flags
         var originalSave = service.saveSettings;
         service.saveSettings = function(whatToBuildElem) {
+            normalizeIndicatorRrConfig(service.config);
             var result = originalSave.apply(this, arguments);
             
             if (whatToBuildElem && service.config) {
@@ -151,6 +152,12 @@
             }
             
             return result;
+        };
+
+        var originalCheckSettings = service.checkSettings;
+        service.checkSettings = function() {
+            normalizeIndicatorRrConfig(this.config);
+            return originalCheckSettings.apply(this, arguments);
         };
 
         // Wrap loadSettings to restore our flags
@@ -178,6 +185,8 @@
             } catch (e) {
                 console.warn('[IndicatorRREnforcer] Error loading flags:', e.message);
             }
+
+            normalizeIndicatorRrConfig(this.config);
             
             console.log('[IndicatorRREnforcer] Flags loaded:', {
                 enforceRR: this.config.enforceIndicatorRRRatio,
@@ -187,8 +196,43 @@
             return result;
         };
 
+        var originalReset = service.resetSettings;
+        service.resetSettings = function(useOldSettings) {
+            var result = originalReset.apply(this, arguments);
+
+            if (!this.config) {
+                this.config = {};
+            }
+
+            if (typeof this.config.enforceIndicatorRRRatio === 'undefined') {
+                this.config.enforceIndicatorRRRatio = !!useOldSettings && !!oldBool(this.config, 'enforceIndicatorRRRatio');
+            }
+            if (typeof this.config.indicatorRRAdjustPT === 'undefined') {
+                this.config.indicatorRRAdjustPT = !!useOldSettings && !!oldBool(this.config, 'indicatorRRAdjustPT');
+            }
+
+            return result;
+        };
+
+        var originalDescription = service.getDescription;
+        service.getDescription = function(settingName) {
+            var description = originalDescription.apply(this, arguments);
+
+            if (!this.config || !this.config.indicatorBased || !this.config.enforceIndicatorRRRatio) {
+                return description;
+            }
+
+            description += ', Enforce indicator RR';
+            description += this.config.indicatorRRAdjustPT ? ', adjust PT' : ', skip invalid';
+            return description;
+        };
+
         console.log('[IndicatorRREnforcer] Service patched successfully');
         return true;
+    }
+
+    function oldBool(config, key) {
+        return !!(config && typeof config[key] !== 'undefined' ? config[key] : false);
     }
 
     function getChildElement(elem, name) {
@@ -220,6 +264,43 @@
         }
         var text = (elem.textContent || elem.innerText || '').toString().trim().toLowerCase();
         return text === 'true' || text === '1' || text === 'yes';
+    }
+
+    function normalizeIndicatorRrConfig(config) {
+        if (!config) {
+            return;
+        }
+
+        if (!config.indicatorBased) {
+            config.enforceIndicatorRRRatio = false;
+            config.indicatorRRAdjustPT = false;
+            return;
+        }
+
+        if (!config.enforceIndicatorRRRatio) {
+            return;
+        }
+
+        // Feed stock RR enforcement path with standard keys for indicator mode.
+        config.limitRRRatio = true;
+
+        var from = Number(config.rrRatioFrom);
+        var to = Number(config.rrRatioTo);
+
+        if (!isFinite(from) || from <= 0) {
+            from = 50;
+        }
+        if (!isFinite(to) || to <= 0) {
+            to = 80;
+        }
+        if (from > to) {
+            var tmp = from;
+            from = to;
+            to = tmp;
+        }
+
+        config.rrRatioFrom = from;
+        config.rrRatioTo = to;
     }
 });
 
