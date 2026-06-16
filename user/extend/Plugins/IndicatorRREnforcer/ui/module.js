@@ -1,9 +1,10 @@
-﻿angular.module('app.settings')
-.run(function($injector, $templateCache) {
+﻿angular.module('app.settings.indicatorrrenforcer', ['sqplugin'])
+.run(function($injector, $templateCache, $timeout) {
     console.log('[IndicatorRREnforcer] Module loaded');
-    
     var FLAG_1 = 'EnforceIndicatorRRRatio';
     var FLAG_2 = 'IndicatorRRAdjustPT';
+    var servicePatchAttempts = 0;
+    var maxServicePatchAttempts = 20;
 
     // Patch template to add our controls
     patchTemplate();
@@ -12,7 +13,11 @@
     patchService();
 
     function patchTemplate() {
-        var templateId = '../../../internal/plugins/SettingsWhatToBuild/views/settings/profitTarget/profitTarget.html';
+        var templateIds = [
+            '../../../plugins/SettingsWhatToBuild/views/settings/profitTarget/profitTarget.html',
+            '../../../internal/plugins/SettingsWhatToBuild/views/settings/profitTarget/profitTarget.html'
+        ];
+        var templateSuffix = '/SettingsWhatToBuild/views/settings/profitTarget/profitTarget.html';
 
         function withInjectedControls(tpl) {
             if (!tpl || tpl.indexOf('enforceIndicatorRRRatio') >= 0) {
@@ -53,26 +58,33 @@
             return tpl.substring(0, idx) + extra + '\n' + tpl.substring(idx);
         }
 
-        var tpl = $templateCache.get(templateId);
-        if (tpl) {
-            var patched = withInjectedControls(tpl);
-            if (patched !== tpl) {
-                $templateCache.put(templateId, patched);
-                console.log('[IndicatorRREnforcer] Template patched successfully (immediate)');
-            } else {
-                console.log('[IndicatorRREnforcer] Template already patched (immediate)');
+        var foundTemplate = false;
+        for (var i = 0; i < templateIds.length; i++) {
+            var templateId = templateIds[i];
+            var tpl = $templateCache.get(templateId);
+            if (tpl) {
+                foundTemplate = true;
+                var patched = withInjectedControls(tpl);
+                if (patched !== tpl) {
+                    $templateCache.put(templateId, patched);
+                    console.log('[IndicatorRREnforcer] Template patched successfully (immediate):', templateId);
+                } else {
+                    console.log('[IndicatorRREnforcer] Template already patched (immediate):', templateId);
+                }
             }
-        } else {
+        }
+
+        if (!foundTemplate) {
             console.warn('[IndicatorRREnforcer] Template not found yet, waiting for template cache put');
         }
 
         if (!$templateCache.__indicatorRrPutWrapped) {
             var originalPut = $templateCache.put;
             $templateCache.put = function(key, value) {
-                if (key === templateId && typeof value === 'string') {
+                if (typeof key === 'string' && typeof value === 'string' && key.indexOf(templateSuffix) >= 0) {
                     var patchedValue = withInjectedControls(value);
                     if (patchedValue !== value) {
-                        console.log('[IndicatorRREnforcer] Template patched successfully (deferred)');
+                        console.log('[IndicatorRREnforcer] Template patched successfully (deferred):', key);
                         return originalPut.call(this, key, patchedValue);
                     }
                 }
@@ -83,17 +95,37 @@
     }
 
     function patchService() {
+        if (!tryPatchService()) {
+            scheduleServicePatchRetry();
+        }
+    }
+
+    function scheduleServicePatchRetry() {
+        if (servicePatchAttempts >= maxServicePatchAttempts) {
+            console.warn('[IndicatorRREnforcer] Giving up on ProfitTargetService patch after retries');
+            return;
+        }
+
+        servicePatchAttempts++;
+        $timeout(function() {
+            if (!tryPatchService()) {
+                scheduleServicePatchRetry();
+            }
+        }, 250, false);
+    }
+
+    function tryPatchService() {
         var service;
         try {
             service = $injector.get('ProfitTargetService');
         } catch (e) {
             console.warn('[IndicatorRREnforcer] ProfitTargetService not found:', e.message);
-            return;
+            return false;
         }
 
         if (service.__indicatorRRPatched) {
             console.log('[IndicatorRREnforcer] Service already patched');
-            return;
+            return true;
         }
         service.__indicatorRRPatched = true;
 
@@ -156,6 +188,7 @@
         };
 
         console.log('[IndicatorRREnforcer] Service patched successfully');
+        return true;
     }
 
     function getChildElement(elem, name) {
@@ -189,3 +222,13 @@
         return text === 'true' || text === '1' || text === 'yes';
     }
 });
+
+try {
+    var appModule = angular.module('app');
+    if (appModule.requires.indexOf('app.settings.indicatorrrenforcer') < 0) {
+        appModule.requires.push('app.settings.indicatorrrenforcer');
+        console.log('[IndicatorRREnforcer] Module attached to app requires');
+    }
+} catch (e) {
+    console.warn('[IndicatorRREnforcer] Unable to attach module to app requires:', e.message);
+}
