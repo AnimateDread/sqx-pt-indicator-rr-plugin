@@ -23,7 +23,9 @@ class IndicatorRREnforcerServlet extends HttpJSONServlet {
         response.put("plugin", "IndicatorRREnforcer");
         response.put("success", "ok");
         response.put("flags", new String[] { "EnforceIndicatorRRRatio", "IndicatorRRAdjustPT" });
-        response.put("note", "UI runtime patch is implemented in ui/module.js");
+        response.put("runtimePatchApplied", IndicatorRREnforcerPlugin.isRuntimePatchApplied());
+        response.put("runtimePatchStatus", IndicatorRREnforcerPlugin.getRuntimePatchStatus());
+        response.put("note", "UI hook is implemented in ui/module.js and stock ProfitTarget runtime is patched on plugin startup");
         return response.toString();
     }
 }

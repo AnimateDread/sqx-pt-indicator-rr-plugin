@@ -1,16 +1,12 @@
-﻿angular.module('app.settings.indicatorrrenforcer', ['sqplugin'])
-.run(function($injector, $templateCache, $timeout) {
+﻿angular.module('app.settings.indicatorrrenforcer', ['app.settings', 'sqplugin'])
+.run(function($templateCache, $injector, $timeout) {
     console.log('[IndicatorRREnforcer] Module loaded');
     var FLAG_1 = 'EnforceIndicatorRRRatio';
     var FLAG_2 = 'IndicatorRRAdjustPT';
-    var servicePatchAttempts = 0;
-    var maxServicePatchAttempts = 20;
 
-    // Patch template to add our controls
+    // Patch template to add our controls.
     patchTemplate();
-    
-    // Patch service to handle our flags
-    patchService();
+    patchServiceLoadSave();
 
     function patchTemplate() {
         var templateIds = [
@@ -94,149 +90,112 @@
         }
     }
 
-    function patchService() {
-        if (!tryPatchService()) {
-            scheduleServicePatchRetry();
-        }
-    }
+    function patchServiceLoadSave() {
+        var attempts = 0;
+        var maxAttempts = 20;
 
-    function scheduleServicePatchRetry() {
-        if (servicePatchAttempts >= maxServicePatchAttempts) {
-            console.warn('[IndicatorRREnforcer] Giving up on ProfitTargetService patch after retries');
-            return;
-        }
+        $timeout(function tryPatch() {
+            try {
+                var service = $injector.get('ProfitTargetService');
+                if (!service || service.__indicatorRRLoadSavePatched) {
+                    return;
+                }
 
-        servicePatchAttempts++;
-        $timeout(function() {
-            if (!tryPatchService()) {
-                scheduleServicePatchRetry();
-            }
-        }, 250, false);
-    }
+                service.__indicatorRRLoadSavePatched = true;
 
-    function tryPatchService() {
-        var service;
-        try {
-            service = $injector.get('ProfitTargetService');
-        } catch (e) {
-            console.warn('[IndicatorRREnforcer] ProfitTargetService not found:', e.message);
-            return false;
-        }
-
-        if (service.__indicatorRRPatched) {
-            console.log('[IndicatorRREnforcer] Service already patched');
-            return true;
-        }
-        service.__indicatorRRPatched = true;
-
-        // Wrap saveSettings to persist our flags
-        var originalSave = service.saveSettings;
-        service.saveSettings = function(whatToBuildElem) {
-            normalizeIndicatorRrConfig(service.config);
-            var result = originalSave.apply(this, arguments);
-            
-            if (whatToBuildElem && service.config) {
-                try {
-                    var slptElem = getChildElement(whatToBuildElem, 'SLPTOptions');
-                    if (!slptElem) {
-                        slptElem = whatToBuildElem.ownerDocument.createElement('SLPTOptions');
-                        whatToBuildElem.appendChild(slptElem);
+                var originalLoad = service.loadSettings;
+                service.loadSettings = function() {
+                    var result = originalLoad.apply(this, arguments);
+                    if (!this.config) {
+                        this.config = {};
                     }
 
-                    setXmlValue(slptElem, FLAG_1, service.config.enforceIndicatorRRRatio, whatToBuildElem.ownerDocument);
-                    setXmlValue(slptElem, FLAG_2, service.config.indicatorRRAdjustPT, whatToBuildElem.ownerDocument);
-                    console.log('[IndicatorRREnforcer] Flags saved to XML');
-                } catch (e) {
-                    console.warn('[IndicatorRREnforcer] Error saving flags:', e.message);
-                }
-            }
-            
-            return result;
-        };
+                    this.config.enforceIndicatorRRRatio = !!this.config.enforceIndicatorRRRatio;
+                    this.config.indicatorRRAdjustPT = !!this.config.indicatorRRAdjustPT;
 
-        var originalCheckSettings = service.checkSettings;
-        service.checkSettings = function() {
-            normalizeIndicatorRrConfig(this.config);
-            return originalCheckSettings.apply(this, arguments);
-        };
+                    try {
+                        var appService = $injector.get('AppService');
+                        var whatToBuildElem = appService.getCurrentTaskTabSettings('WhatToBuild');
+                        var slptElem = getChildElement(whatToBuildElem, 'SLPTOptions');
+                        if (slptElem) {
+                            this.config.enforceIndicatorRRRatio = getXmlBool(slptElem, FLAG_1, this.config.enforceIndicatorRRRatio);
+                            this.config.indicatorRRAdjustPT = getXmlBool(slptElem, FLAG_2, this.config.indicatorRRAdjustPT);
+                        }
+                    } catch (e) {
+                        console.warn('[IndicatorRREnforcer] loadSettings flag read skipped:', e.message);
+                    }
 
-        // Wrap loadSettings to restore our flags
-        var originalLoad = service.loadSettings;
-        service.loadSettings = function() {
-            var result = originalLoad.apply(this, arguments);
-            
-            if (!this.config) {
-                this.config = {};
-            }
-            if (typeof this.config.enforceIndicatorRRRatio === 'undefined') {
-                this.config.enforceIndicatorRRRatio = false;
-            }
-            if (typeof this.config.indicatorRRAdjustPT === 'undefined') {
-                this.config.indicatorRRAdjustPT = false;
-            }
+                    normalizeIndicatorRrConfig(this.config);
 
-            try {
-                var whatToBuildElem = $injector.get('AppService').getCurrentTaskTabSettings('WhatToBuild');
-                var slptElem = getChildElement(whatToBuildElem, 'SLPTOptions');
-                if (slptElem) {
-                    this.config.enforceIndicatorRRRatio = getXmlBool(slptElem, FLAG_1, this.config.enforceIndicatorRRRatio);
-                    this.config.indicatorRRAdjustPT = getXmlBool(slptElem, FLAG_2, this.config.indicatorRRAdjustPT);
-                }
+                    return result;
+                };
+
+                var originalSave = service.saveSettings;
+                service.saveSettings = function(whatToBuildElem) {
+                    if (!this.config) {
+                        this.config = {};
+                    }
+
+                    this.config.enforceIndicatorRRRatio = !!this.config.enforceIndicatorRRRatio;
+                    this.config.indicatorRRAdjustPT = !!this.config.indicatorRRAdjustPT;
+                    normalizeIndicatorRrConfig(this.config);
+
+                    var result = originalSave.apply(this, arguments);
+
+                    try {
+                        if (whatToBuildElem) {
+                            var slptElem = ensureChildElement(whatToBuildElem, 'SLPTOptions');
+                            setXmlValue(slptElem, FLAG_1, this.config.enforceIndicatorRRRatio, whatToBuildElem.ownerDocument);
+                            setXmlValue(slptElem, FLAG_2, this.config.indicatorRRAdjustPT, whatToBuildElem.ownerDocument);
+                        }
+                    } catch (e) {
+                        console.warn('[IndicatorRREnforcer] saveSettings flag write skipped:', e.message);
+                    }
+
+                    return result;
+                };
+
+                var originalReset = service.resetSettings;
+                service.resetSettings = function(useOldSettings) {
+                    var result = originalReset.apply(this, arguments);
+
+                    if (!this.config) {
+                        this.config = {};
+                    }
+
+                    this.config.enforceIndicatorRRRatio = !!this.config.enforceIndicatorRRRatio;
+                    this.config.indicatorRRAdjustPT = !!this.config.indicatorRRAdjustPT;
+                    normalizeIndicatorRrConfig(this.config);
+
+                    return result;
+                };
+
+                var originalCheck = service.checkSettings;
+                service.checkSettings = function() {
+                    if (!this.config) {
+                        this.config = {};
+                    }
+
+                    normalizeIndicatorRrConfig(this.config);
+                    return originalCheck.apply(this, arguments);
+                };
+
+                console.log('[IndicatorRREnforcer] ProfitTargetService load/save patched');
             } catch (e) {
-                console.warn('[IndicatorRREnforcer] Error loading flags:', e.message);
+                if (attempts < maxAttempts) {
+                    attempts++;
+                    $timeout(tryPatch, 250, false);
+                } else {
+                    console.warn('[IndicatorRREnforcer] ProfitTargetService not patched:', e.message);
+                }
             }
-
-            normalizeIndicatorRrConfig(this.config);
-            
-            console.log('[IndicatorRREnforcer] Flags loaded:', {
-                enforceRR: this.config.enforceIndicatorRRRatio,
-                adjustPT: this.config.indicatorRRAdjustPT
-            });
-            
-            return result;
-        };
-
-        var originalReset = service.resetSettings;
-        service.resetSettings = function(useOldSettings) {
-            var result = originalReset.apply(this, arguments);
-
-            if (!this.config) {
-                this.config = {};
-            }
-
-            if (typeof this.config.enforceIndicatorRRRatio === 'undefined') {
-                this.config.enforceIndicatorRRRatio = !!useOldSettings && !!oldBool(this.config, 'enforceIndicatorRRRatio');
-            }
-            if (typeof this.config.indicatorRRAdjustPT === 'undefined') {
-                this.config.indicatorRRAdjustPT = !!useOldSettings && !!oldBool(this.config, 'indicatorRRAdjustPT');
-            }
-
-            return result;
-        };
-
-        var originalDescription = service.getDescription;
-        service.getDescription = function(settingName) {
-            var description = originalDescription.apply(this, arguments);
-
-            if (!this.config || !this.config.indicatorBased || !this.config.enforceIndicatorRRRatio) {
-                return description;
-            }
-
-            description += ', Enforce indicator RR';
-            description += this.config.indicatorRRAdjustPT ? ', adjust PT' : ', skip invalid';
-            return description;
-        };
-
-        console.log('[IndicatorRREnforcer] Service patched successfully');
-        return true;
-    }
-
-    function oldBool(config, key) {
-        return !!(config && typeof config[key] !== 'undefined' ? config[key] : false);
+        }, 0, false);
     }
 
     function getChildElement(elem, name) {
-        if (!elem || !elem.childNodes) return null;
+        if (!elem || !elem.childNodes) {
+            return null;
+        }
         for (var i = 0; i < elem.childNodes.length; i++) {
             if (elem.childNodes[i].nodeName === name) {
                 return elem.childNodes[i];
@@ -245,12 +204,18 @@
         return null;
     }
 
-    function setXmlValue(parentElem, nodeName, value, xmlDoc) {
-        var elem = getChildElement(parentElem, nodeName);
-        if (!elem) {
-            elem = xmlDoc.createElement(nodeName);
-            parentElem.appendChild(elem);
+    function ensureChildElement(parentElem, name) {
+        var elem = getChildElement(parentElem, name);
+        if (elem) {
+            return elem;
         }
+        elem = parentElem.ownerDocument.createElement(name);
+        parentElem.appendChild(elem);
+        return elem;
+    }
+
+    function setXmlValue(parentElem, nodeName, value, xmlDoc) {
+        var elem = ensureChildElement(parentElem, nodeName);
         while (elem.firstChild) {
             elem.removeChild(elem.firstChild);
         }
@@ -281,35 +246,11 @@
             return;
         }
 
-        // Feed stock RR enforcement path with standard keys for indicator mode.
+        // Route indicator RR to the stock RR path and leave the stock ratio values untouched.
         config.limitRRRatio = true;
-
-        var from = Number(config.rrRatioFrom);
-        var to = Number(config.rrRatioTo);
-
-        if (!isFinite(from) || from <= 0) {
-            from = 50;
-        }
-        if (!isFinite(to) || to <= 0) {
-            to = 80;
-        }
-        if (from > to) {
-            var tmp = from;
-            from = to;
-            to = tmp;
-        }
-
-        config.rrRatioFrom = from;
-        config.rrRatioTo = to;
     }
+
 });
 
-try {
-    var appModule = angular.module('app');
-    if (appModule.requires.indexOf('app.settings.indicatorrrenforcer') < 0) {
-        appModule.requires.push('app.settings.indicatorrrenforcer');
-        console.log('[IndicatorRREnforcer] Module attached to app requires');
-    }
-} catch (e) {
-    console.warn('[IndicatorRREnforcer] Unable to attach module to app requires:', e.message);
-}
+// Module will be auto-discovered via app.settings dependency chain
+
